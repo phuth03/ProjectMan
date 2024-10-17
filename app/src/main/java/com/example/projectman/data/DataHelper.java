@@ -5,15 +5,21 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.os.Handler;
 import android.util.Log;
+import android.widget.Toast;
 
+import com.example.projectman.NotificationHelper;
 import com.example.projectman.model.Task;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
+
 
 public class DataHelper extends SQLiteOpenHelper {
 
@@ -38,6 +44,7 @@ public class DataHelper extends SQLiteOpenHelper {
     public static final String COLUMN_STARTDATE = "STARTDATE";
     public static final String COLUMN_ENDDATE = "ENDDATE";
 
+
     // Create table SQL statements
     private static final String CREATE_TABLE_TASK = "CREATE TABLE "
             + TABLE_TASK + "(" + COLUMN_TASK_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -54,10 +61,11 @@ public class DataHelper extends SQLiteOpenHelper {
             + COLUMN_TASK_ESTIMATE + " INTEGER, "
             + "FOREIGN KEY(" + COLUMN_TASKID + ") REFERENCES " + TABLE_TASK + "(" + COLUMN_TASK_ID + "))";
 
+    private final Context context;
     public DataHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
+        this.context = context;
     }
-
     @Override
     public void onCreate(SQLiteDatabase db) {
         // Create tables
@@ -141,28 +149,125 @@ public class DataHelper extends SQLiteOpenHelper {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
 
-        // Update the dev_task table
         values.put(COLUMN_DEV_NAME, task.getAssignee());
         values.put(COLUMN_STARTDATE, task.getStartDate());
         values.put(COLUMN_ENDDATE, task.getEndDate());
         values.put(COLUMN_TASK_ESTIMATE, task.getEstimateDay());
 
-        int updatedRows = db.update(TABLE_DEV_TASK, values, COLUMN_TASKID + " = ?",
+        // Check for overlaps
+        List<Task> overlappingTasks = getOverlappingTasks(task);
+        if (!overlappingTasks.isEmpty()) {
+            // Create notification
+            createOverlapNotification(context, task, overlappingTasks);
+        }
+
+        return db.update(TABLE_DEV_TASK, values, COLUMN_DEV_TASK_ID + " = ?",
                 new String[]{String.valueOf(task.getTaskId())});
-
-        // Clear the values for the next update
-        values.clear();
-
-        // Update the task table
-        values.put(COLUMN_TASK_NAME, task.getTaskName());
-        values.put(COLUMN_TASK_ESTIMATE, task.getEstimateDay());
-
-        updatedRows += db.update(TABLE_TASK, values, COLUMN_TASK_ID + " = ?",
-                new String[]{String.valueOf(task.getTaskId())});
-
-        return updatedRows;
     }
 
+    private List<Task> getOverlappingTasks(Task task) {
+        List<Task> overlappingTasks = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+
+        String query = "SELECT * FROM " + TABLE_DEV_TASK +
+                " WHERE " + COLUMN_DEV_NAME + " = ? " +
+                " AND " + COLUMN_DEV_TASK_ID + " != ? " +
+                " AND ((? BETWEEN " + COLUMN_STARTDATE + " AND " + COLUMN_ENDDATE + ") " +
+                " OR (? BETWEEN " + COLUMN_STARTDATE + " AND " + COLUMN_ENDDATE + ") " +
+                " OR (" + COLUMN_STARTDATE + " BETWEEN ? AND ?))";
+
+        Cursor cursor = db.rawQuery(query, new String[]{
+                task.getAssignee(),
+                String.valueOf(task.getTaskId()),
+                task.getStartDate(),
+                task.getEndDate(),
+                task.getStartDate(),
+                task.getEndDate()
+        });
+
+        while (cursor.moveToNext()) {
+            int devTaskId = getColumnValue(cursor, COLUMN_DEV_TASK_ID, -1);
+            String devName = getColumnValue(cursor, COLUMN_DEV_NAME, "");
+            String startDate = getColumnValue(cursor, COLUMN_STARTDATE, "");
+            String endDate = getColumnValue(cursor, COLUMN_ENDDATE, "");
+            int taskEstimate = getColumnValue(cursor, COLUMN_TASK_ESTIMATE, 0);
+            int taskId = getColumnValue(cursor, COLUMN_TASKID, -1);
+
+            if (taskId != -1) {
+                Task overlappingTask = new Task(
+                        devTaskId,
+                        getTaskName(taskId),
+                        devName,
+                        taskEstimate,
+                        startDate,
+                        endDate
+                );
+                overlappingTasks.add(overlappingTask);
+            }
+        }
+        cursor.close();
+
+        return overlappingTasks;
+    }
+
+    // Utility function to safely get column values with a default fallback
+    private int getColumnValue(Cursor cursor, String columnName, int defaultValue) {
+        int index = cursor.getColumnIndex(columnName);
+        return index != -1 ? cursor.getInt(index) : defaultValue;
+    }
+
+    private String getColumnValue(Cursor cursor, String columnName, String defaultValue) {
+        int index = cursor.getColumnIndex(columnName);
+        return index != -1 ? cursor.getString(index) : defaultValue;
+    }
+
+    private String getTaskName(int taskId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        String query = "SELECT " + COLUMN_TASK_NAME + " FROM " + TABLE_TASK +
+                " WHERE " + COLUMN_TASK_ID + " = ?";
+        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(taskId)});
+
+        String taskName = "";
+        if (cursor.moveToFirst()) {
+            taskName = getColumnValue(cursor, COLUMN_TASK_NAME,"");
+        }
+        cursor.close();
+
+        return taskName;
+    }
+
+    private void createOverlapNotification(Context context, Task updatedTask, List<Task> overlappingTasks) {
+        StringBuilder notificationContent = new StringBuilder();
+        notificationContent.append("Task '").append(updatedTask.getTaskName())
+                .append("'overlap with:\n");
+
+        for (Task overlappingTask : overlappingTasks) {
+            notificationContent.append("- ").append(overlappingTask.getTaskName())
+                    .append(" (").append(overlappingTask.getStartDate())
+                    .append(" to ").append(overlappingTask.getEndDate())
+                    .append(")\n");
+        }
+
+        // Here you would integrate with your app's notification system
+        // For example:
+
+        NotificationHelper.createNotification(
+                context, "Task Overlap", notificationContent.toString());
+        // Show the message as a Toast
+        showLongToast(context, notificationContent.toString(), 5000);  // 10 seconds
+    }
+    private void showLongToast(Context context, String message, int durationInMillis) {
+        final Toast toast = Toast.makeText(context, message, Toast.LENGTH_LONG);
+
+        // Calculate how many times to show the Toast based on total duration
+        int repeatCount = durationInMillis / 3500;  // Toast.LENGTH_LONG lasts ~3.5 seconds
+
+        // Use a Handler to repeat the Toast
+        Handler handler = new Handler();
+        for (int i = 0; i < repeatCount; i++) {
+            handler.postDelayed(toast::show, i * 3500L);
+        }
+    }
     public boolean deleteTask(int taskId) {
         SQLiteDatabase db = this.getWritableDatabase();
         int result = db.delete(TABLE_TASK, COLUMN_TASK_ID + "=?", new String[]{String.valueOf(taskId)});
