@@ -12,13 +12,9 @@ public class Task {
     private String taskName;
     private String assignee;
     private int estimateDay;
-    private String startDate; // Changed to Date
-    private String endDate;   // Changed to Date
+    private String startDate;
+    private String endDate;
 
-    // Default Constructor
-    public Task() {}
-
-    // Parameterized Constructor
     public Task(int taskId, String taskName, String assignee, int estimateDay, String startDate, String endDate) {
         this.taskId = taskId;
         this.taskName = taskName;
@@ -27,7 +23,6 @@ public class Task {
         this.startDate = startDate;
         this.endDate = endDate;
     }
-
     // Getters and Setters
     public int getTaskId() { return taskId; }
     public void setTaskId(int taskId) { this.taskId = taskId; }

@@ -140,14 +140,27 @@ public class DataHelper extends SQLiteOpenHelper {
     public int updateTask(Task task) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
-        values.put(COLUMN_TASK_NAME, task.getTaskName());
+
+        // Update the dev_task table
         values.put(COLUMN_DEV_NAME, task.getAssignee());
         values.put(COLUMN_STARTDATE, task.getStartDate());
         values.put(COLUMN_ENDDATE, task.getEndDate());
         values.put(COLUMN_TASK_ESTIMATE, task.getEstimateDay());
 
-        return db.update(TABLE_DEV_TASK, values, COLUMN_TASK_ID + " = ?",
+        int updatedRows = db.update(TABLE_DEV_TASK, values, COLUMN_TASKID + " = ?",
                 new String[]{String.valueOf(task.getTaskId())});
+
+        // Clear the values for the next update
+        values.clear();
+
+        // Update the task table
+        values.put(COLUMN_TASK_NAME, task.getTaskName());
+        values.put(COLUMN_TASK_ESTIMATE, task.getEstimateDay());
+
+        updatedRows += db.update(TABLE_TASK, values, COLUMN_TASK_ID + " = ?",
+                new String[]{String.valueOf(task.getTaskId())});
+
+        return updatedRows;
     }
 
     public boolean deleteTask(int taskId) {
@@ -195,10 +208,10 @@ public class DataHelper extends SQLiteOpenHelper {
             Date end = sdf.parse(endDate);
             long diffInMillies = Math.abs(end.getTime() - start.getTime());
             long diff = TimeUnit.DAYS.convert(diffInMillies, TimeUnit.MILLISECONDS);
-            return (int) diff + 1; // Adding 1 to include both start and end dates
+            return (int) diff + 1;
         } catch (ParseException e) {
             e.printStackTrace();
-            return 0; // Return 0 if there's an error parsing dates
+            return 0;
         }
     }
 

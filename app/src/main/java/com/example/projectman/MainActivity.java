@@ -6,6 +6,7 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -45,7 +46,8 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
     private ArrayList<String> endDateList;
     private FloatingActionButton buttonAddTask;
     private int estimatedDays = 0;
-
+    private FloatingActionButton fabDelete;
+    private CheckBox selectAllCheckBox;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,6 +59,8 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
         setupRecyclerView();
         setupSearchView();
         setupAddTaskButton();
+        setupDeleteButton();
+        setupSelectAllCheckBox();
     }
 
     private void initializeViews() {
@@ -70,6 +74,9 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
         assigneeList = new ArrayList<>();
         startDateList = new ArrayList<>();
         endDateList = new ArrayList<>();
+        fabDelete = findViewById(R.id.fabDelete);
+        selectAllCheckBox = findViewById(R.id.selectAll);
+
     }
 
     private void setupBottomNavigation() {
@@ -97,6 +104,8 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
             taskAdapter = new TaskAdapter(this, taskIDList, taskNameList, estimateDayList, assigneeList, startDateList, endDateList, this);
             recyclerView.setAdapter(taskAdapter);
             recyclerView.setLayoutManager(new LinearLayoutManager(this));
+
+            Log.d("MainActivity", "RecyclerView item count: " + taskAdapter.getItemCount());
         } else {
             Toast.makeText(this, "Error: Task data is inconsistent.", Toast.LENGTH_SHORT).show();
         }
@@ -199,6 +208,91 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
         bottomSheetDialog.show();
     }
 
+    @Override
+    public void onTaskUpdate(Task task) {
+        showUpdateTaskDialog(task);
+    }
+
+    private void showUpdateTaskDialog(Task task) {
+        BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(MainActivity.this);
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_update_task, null);
+
+        EditText taskNameInput = dialogView.findViewById(R.id.taskNameInput);
+        EditText assigneeInput = dialogView.findViewById(R.id.assigneeInput);
+        EditText startDateInput = dialogView.findViewById(R.id.startDateInput);
+        EditText endDateInput = dialogView.findViewById(R.id.endDateInput);
+        TextView estimateDayDisplay = dialogView.findViewById(R.id.estimateDayDisplay);
+
+        // Populate fields with current task data
+        taskNameInput.setText(task.getTaskName());
+        assigneeInput.setText(task.getAssignee());
+        startDateInput.setText(task.getStartDate());
+        endDateInput.setText(task.getEndDate());
+        estimateDayDisplay.setText(String.valueOf(task.getEstimateDay()));
+
+        // Add TextWatcher to start and end date inputs
+        TextWatcher dateWatcher = new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                updateEstimateDays(startDateInput.getText().toString(),
+                        endDateInput.getText().toString(),
+                        estimateDayDisplay);
+            }
+        };
+
+        startDateInput.addTextChangedListener(dateWatcher);
+        endDateInput.addTextChangedListener(dateWatcher);
+
+        dialogView.findViewById(R.id.btnSaveTask).setOnClickListener(v -> {
+            String taskName = taskNameInput.getText().toString().trim();
+            String assignee = assigneeInput.getText().toString().trim();
+            String startDate = startDateInput.getText().toString().trim();
+            String endDate = endDateInput.getText().toString().trim();
+
+            // Validate input
+            if (taskName.isEmpty() || assignee.isEmpty() || startDate.isEmpty() || endDate.isEmpty()) {
+                Toast.makeText(MainActivity.this, "Please fill all fields", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // Calculate estimate days before saving
+            int estimateDays = calculateEstimateDays(startDate, endDate);
+            if (estimateDays == -1) {
+                Toast.makeText(MainActivity.this, "Invalid dates. Please check your input.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            // Create updated Task object
+            Task updatedTask = new Task(
+                    task.getTaskId(),
+                    taskName,
+                    assignee,
+                    estimateDays,
+                    startDate,
+                    endDate
+            );
+
+            // Update the task in the database
+            int rowsAffected = dataHelper.updateTask(updatedTask);
+            if (rowsAffected > 0) {
+                fetchTasksFromDatabase();
+                taskAdapter.notifyDataSetChanged();
+                bottomSheetDialog.dismiss();
+                Toast.makeText(MainActivity.this, "Task updated successfully", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(MainActivity.this, "Failed to update task", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        bottomSheetDialog.setContentView(dialogView);
+        bottomSheetDialog.show();
+    }
     private int calculateEstimateDays(String startDate, String endDate) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
 
@@ -282,26 +376,71 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
         for (int i = 0; i < taskIDList.size(); i++) {
             Log.d("MainActivity", "Task: " + taskNameList.get(i) + ", Estimate: " + estimateDayList.get(i));
         }
+        cursor.close();
+
+        // Debug log to verify data
+        Log.d("MainActivity", "taskIDList size: " + taskIDList.size());
+        Log.d("MainActivity", "taskNameList size: " + taskNameList.size());
+        Log.d("MainActivity", "estimateDayList size: " + estimateDayList.size());
+        Log.d("MainActivity", "assigneeList size: " + assigneeList.size());
+        Log.d("MainActivity", "startDateList size: " + startDateList.size());
+        Log.d("MainActivity", "endDateList size: " + endDateList.size());
+
+        for (int i = 0; i < taskIDList.size(); i++) {
+            Log.d("MainActivity", "Task: " + taskNameList.get(i) + ", Estimate: " + estimateDayList.get(i));
+        }
+
     }
 
 
-    @Override
-    public void onTaskUpdate(Task task) {
-        // Implement task update logic
-        // For example, show an edit task dialog
-        Toast.makeText(this, "Update task: " + task.getTaskName(), Toast.LENGTH_SHORT).show();
-    }
 
     @Override
     public void onTaskDelete(Task task) {
-        // Implement task delete logic
+        // Handle the task delete logic here
         boolean success = dataHelper.deleteTask(task.getTaskId());
         if (success) {
-            fetchTasksFromDatabase();
+            fetchTasksFromDatabase();  // Refresh the list after deletion
             taskAdapter.notifyDataSetChanged();
-            Toast.makeText(this, "Task deleted: " + task.getTaskName(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Task deleted successfully", Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(this, "Failed to delete task", Toast.LENGTH_SHORT).show();
         }
+    }
+    private void setupDeleteButton() {
+        fabDelete.setOnClickListener(v -> deleteSelectedTasks());
+    }
+
+    private void setupSelectAllCheckBox() {
+        selectAllCheckBox.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            taskAdapter.selectAllTasks(isChecked);
+            taskAdapter.notifyDataSetChanged();
+        });
+    }
+
+    private void deleteSelectedTasks() {
+        ArrayList<Task> selectedTasks = taskAdapter.getSelectedTasks();
+        if (selectedTasks.isEmpty()) {
+            Toast.makeText(this, "No tasks selected", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        int deletedCount = 0;
+        for (Task task : selectedTasks) {
+            boolean success = dataHelper.deleteTask(task.getTaskId());
+            if (success) {
+                deletedCount++;
+            }
+        }
+
+        if (deletedCount > 0) {
+            fetchTasksFromDatabase();
+            taskAdapter.notifyDataSetChanged();
+            Toast.makeText(this, deletedCount + " task(s) deleted", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "Failed to delete tasks", Toast.LENGTH_SHORT).show();
+        }
+
+        // Uncheck the selectAllCheckBox
+        selectAllCheckBox.setChecked(false);
     }
 }
