@@ -42,6 +42,16 @@ public class Task {
     public String getEndDate() { return endDate; }
     public void setEndDate(String endDate) { this.endDate = endDate; }
 
+    private int rowIndex = -1;  // Default to unassigned row
+
+    // Getters and Setters for rowIndex
+    public int getRowIndex() {
+        return rowIndex;
+    }
+    public void setRowIndex(int rowIndex) {
+        this.rowIndex = rowIndex;
+    }
+
     @Override
     public String toString() {
         return "Task{" +

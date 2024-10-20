@@ -130,6 +130,22 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.ViewHolder> im
         }
 
 
+        if (showEstimateDay) {
+            holder.estimateDay.setVisibility(View.VISIBLE);
+            holder.estimateDay.setText(String.valueOf(estimateDayList.get(position)));
+        } else {
+            holder.estimateDay.setVisibility(View.GONE);
+        }
+
+    }
+    private boolean showEstimateDay = true;
+    public boolean isShowingDates() {
+        return showEstimateDay;
+    }
+
+
+    public void setShowEstimateDay(boolean showEstimateDay) {
+        this.showEstimateDay = showEstimateDay;
     }
     public void selectAllTasks(boolean isSelected) {
         for (int i = 0; i < selectedTasks.size(); i++) {

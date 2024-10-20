@@ -69,7 +69,7 @@ public class HomeFragment extends Fragment implements TaskAdapter.TaskItemListen
 
         recyclerView.setAdapter(taskAdapter);
 
-        return view;
+        return inflater.inflate(R.layout.fragment_home, container, false);
     }
 
     private void loadData() {

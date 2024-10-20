@@ -1,18 +1,27 @@
 package com.example.projectman;
 
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.SearchView;
+import androidx.appcompat.widget.Toolbar;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
 import androidx.navigation.NavController;
 import androidx.navigation.fragment.NavHostFragment;
 import androidx.navigation.ui.NavigationUI;
@@ -22,6 +31,9 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.projectman.adapter.TaskAdapter;
 import com.example.projectman.data.DataHelper;
 import com.example.projectman.model.Task;
+import com.example.projectman.ui.chart.GanttChartFragment;
+import com.example.projectman.ui.setting.SettingsFragment;
+//import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
@@ -48,19 +60,47 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
     private int estimatedDays = 0;
     private FloatingActionButton fabDelete;
     private CheckBox selectAllCheckBox;
+    private ActionBar toolbar;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         initializeViews();
-        setupBottomNavigation();
+//        setupBottomNavigation();
         setupRecyclerView();
         setupSearchView();
         setupAddTaskButton();
         setupDeleteButton();
         setupSelectAllCheckBox();
+
+        BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_nav);
+        bottomNavigationView.setOnItemSelectedListener(item -> {
+            Fragment fragment = null;
+            int itemId = item.getItemId();
+
+            if (itemId == R.id.homeFragment) {
+                setToolbarTitle("Home");
+                fragment = new HomeFragment();
+            } else if (itemId == R.id.ganttChartFragment) {
+                setToolbarTitle("Gantt Chart");
+                fragment = new GanttChartFragment();
+            } else if (itemId == R.id.switchEstimateDate) {
+                setToolbarTitle("Hide/Display");
+                toggleEstimateDateView();
+                return true;  // Since no fragment is being loaded.
+            } else if (itemId == R.id.settingFragment) {
+                setToolbarTitle("Settings");
+                fragment = new SettingsFragment();
+            }
+
+            if (fragment != null) {
+                loadFragment(fragment);
+                return true;
+            }
+            return false;
+        });
     }
 
     private void initializeViews() {
@@ -78,20 +118,25 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
         selectAllCheckBox = findViewById(R.id.selectAll);
 
     }
-
     private void setupBottomNavigation() {
-        BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_nav);
-        try {
-            NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
-                    .findFragmentById(R.id.recyclerView);
-            NavController navController = navHostFragment.getNavController();
-            NavigationUI.setupWithNavController(bottomNavigationView, navController);
-        } catch (Exception e) {
-            e.printStackTrace();
-            // Log error
+
+    }
+    private void setToolbarTitle(String title) {
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setTitle(title);
         }
     }
-
+    private void loadFragment(Fragment fragment) {
+        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        transaction.replace(R.id.fragment_container, fragment);
+        transaction.setPrimaryNavigationFragment(fragment); // Sets this as the primary navigation fragment.
+        transaction.commit();
+    }
+    private void toggleEstimateDateView() {
+        boolean showDates = !taskAdapter.isShowingDates();
+        taskAdapter.setShowEstimateDay(showDates);
+        taskAdapter.notifyDataSetChanged();
+    }
     private void setupRecyclerView() {
         fetchTasksFromDatabase();
 
@@ -207,7 +252,12 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
         bottomSheetDialog.setContentView(dialogView);
         bottomSheetDialog.show();
     }
-
+    public void updateTaskListView() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        boolean showEstimateDay = prefs.getBoolean("show_estimate_day", true);
+        taskAdapter.setShowEstimateDay(showEstimateDay);
+        taskAdapter.notifyDataSetChanged();
+    }
     @Override
     public void onTaskUpdate(Task task) {
         showUpdateTaskDialog(task);
@@ -293,6 +343,7 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
         bottomSheetDialog.setContentView(dialogView);
         bottomSheetDialog.show();
     }
+
     private int calculateEstimateDays(String startDate, String endDate) {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
 
@@ -370,7 +421,6 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
                 if (estimateDayIndex != -1) estimateDayList.add(cursor.getInt(estimateDayIndex));
             }
         }
-        cursor.close();
 
         // Debug log to verify data
         for (int i = 0; i < taskIDList.size(); i++) {
