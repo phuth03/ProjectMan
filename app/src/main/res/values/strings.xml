@@ -3,13 +3,6 @@
     <string name="add_new_task">Add new task</string>
     <string name="update_task">Update task</string>
     <string name="delete_task">Delete task</string>
-    <string-array name="status_options">
-        <item>Not Started</item>
-        <item>In Progress</item>
-        <item>Completed</item>
-    </string-array>
-    <string name="content_title">Your Title Here</string>
-    <string name="content_title_description">Description of the title for accessibility</string>
-    <string name="content_text">Your main content text goes here. This can be a long paragraph or multiple paragraphs of text that will be scrollable within the ScrollView.</string>
-
+    <string name="start">Start Music</string>
+    <string name="stop">Stop Music</string>
 </resources>

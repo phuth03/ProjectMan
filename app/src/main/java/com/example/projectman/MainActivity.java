@@ -1,8 +1,10 @@
 package com.example.projectman;
 
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.database.Cursor;
 import android.os.Bundle;
+import android.os.Parcelable;
 import android.preference.PreferenceManager;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -37,6 +39,8 @@ import com.example.projectman.ui.setting.SettingsFragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.navigation.NavigationBarView;
+import com.google.android.material.navigation.NavigationView;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -57,50 +61,66 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
     private ArrayList<String> startDateList;
     private ArrayList<String> endDateList;
     private FloatingActionButton buttonAddTask;
-    private int estimatedDays = 0;
     private FloatingActionButton fabDelete;
     private CheckBox selectAllCheckBox;
-    private ActionBar toolbar;
-
+    private CheckBox checkBox;
+    private NavigationView navigationView;
+    private BottomNavigationView bottomNavigationView;
+    private static final String KEY_TASK_ID_LIST = "taskIDList";
+    private static final String KEY_TASK_NAME_LIST = "taskNameList";
+    private static final String KEY_ESTIMATE_DAY_LIST = "estimateDayList";
+    private static final String KEY_ASSIGNEE_LIST = "assigneeList";
+    private static final String KEY_START_DATE_LIST = "startDateList";
+    private static final String KEY_END_DATE_LIST = "endDateList";
+    private static final String KEY_RECYCLER_STATE = "recyclerViewState";
+    private Parcelable recyclerViewState;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initializeViews();
-//        setupBottomNavigation();
+        if (savedInstanceState != null) {
+            // Khôi phục dữ liệu đã lưu
+            taskIDList = savedInstanceState.getIntegerArrayList(KEY_TASK_ID_LIST);
+            taskNameList = savedInstanceState.getStringArrayList(KEY_TASK_NAME_LIST);
+            estimateDayList = savedInstanceState.getIntegerArrayList(KEY_ESTIMATE_DAY_LIST);
+            assigneeList = savedInstanceState.getStringArrayList(KEY_ASSIGNEE_LIST);
+            startDateList = savedInstanceState.getStringArrayList(KEY_START_DATE_LIST);
+            endDateList = savedInstanceState.getStringArrayList(KEY_END_DATE_LIST);
+            recyclerViewState = savedInstanceState.getParcelable(KEY_RECYCLER_STATE);
+
+        } else {
+            // Khởi tạo danh sách nếu không có trạng thái đã lưu
+            taskIDList = new ArrayList<>();
+            taskNameList = new ArrayList<>();
+            estimateDayList = new ArrayList<>();
+            assigneeList = new ArrayList<>();
+            startDateList = new ArrayList<>();
+            endDateList = new ArrayList<>();
+            fetchTasksFromDatabase();
+        }
         setupRecyclerView();
         setupSearchView();
         setupAddTaskButton();
         setupDeleteButton();
         setupSelectAllCheckBox();
+        setupNavigation();
 
-        BottomNavigationView bottomNavigationView = findViewById(R.id.bottom_nav);
-        bottomNavigationView.setOnItemSelectedListener(item -> {
-            Fragment fragment = null;
-            int itemId = item.getItemId();
 
-            if (itemId == R.id.homeFragment) {
-                setToolbarTitle("Home");
-                fragment = new HomeFragment();
-            } else if (itemId == R.id.ganttChartFragment) {
-                setToolbarTitle("Gantt Chart");
-                fragment = new GanttChartFragment();
-            } else if (itemId == R.id.switchEstimateDate) {
-                setToolbarTitle("Hide/Display");
-                toggleEstimateDateView();
-                return true;  // Since no fragment is being loaded.
-            } else if (itemId == R.id.settingFragment) {
-                setToolbarTitle("Settings");
-                fragment = new SettingsFragment();
-            }
-
-            if (fragment != null) {
-                loadFragment(fragment);
-                return true;
-            }
-            return false;
-        });
+    }
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        // Lưu trạng thái hiện tại
+        outState.putIntegerArrayList(KEY_TASK_ID_LIST, taskIDList);
+        outState.putStringArrayList(KEY_TASK_NAME_LIST, taskNameList);
+        outState.putIntegerArrayList(KEY_ESTIMATE_DAY_LIST, new ArrayList<>(estimateDayList));
+        outState.putStringArrayList(KEY_ASSIGNEE_LIST, assigneeList);
+        outState.putStringArrayList(KEY_START_DATE_LIST, startDateList);
+        outState.putStringArrayList(KEY_END_DATE_LIST, endDateList);
+        recyclerViewState = recyclerView.getLayoutManager().onSaveInstanceState();
+        outState.putParcelable(KEY_RECYCLER_STATE, recyclerViewState);
     }
 
     private void initializeViews() {
@@ -116,10 +136,84 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
         endDateList = new ArrayList<>();
         fabDelete = findViewById(R.id.fabDelete);
         selectAllCheckBox = findViewById(R.id.selectAll);
+        // Try to find NavigationView first (for landscape)
+        navigationView = findViewById(R.id.nav_view);
+
+        // If NavigationView is not found, try to find BottomNavigationView (for portrait)
+        if (navigationView == null) {
+            bottomNavigationView = findViewById(R.id.bottom_nav);
+        }
 
     }
-    private void setupBottomNavigation() {
+    private void setupNavigation() {
+        if (navigationView != null) {
+            // We're in landscape mode
+            setupNavigationView();
+        } else if (bottomNavigationView != null) {
+            // We're in portrait mode
+            setupBottomNavigation();
+        }
+    }
+    private void setupNavigationView() {
+        navigationView.setNavigationItemSelectedListener(
+                item -> handleNavigationItemSelected(item)
+        );
+    }
 
+    private void setupBottomNavigation() {
+        bottomNavigationView.setOnItemSelectedListener(
+                item -> handleNavigationItemSelected(item)
+        );
+    }
+    private boolean handleNavigationItemSelected(@NonNull MenuItem item) {
+        Fragment fragment = null;
+        int itemId = item.getItemId();
+
+        if (itemId == R.id.homeFragment) {
+            setToolbarTitle("Home");
+            fragment = new HomeFragment();
+        } else if (itemId == R.id.ganttChartFragment) {
+            setToolbarTitle("Gantt Chart");
+            fragment = new GanttChartFragment();
+        } else if (itemId == R.id.switchEstimateDate) {
+            setToolbarTitle("Hide/Display");
+            toggleEstimateDateView();
+            return true;  // Don't load fragment
+        } else if (itemId == R.id.settingFragment) {
+            setToolbarTitle("Settings");
+            fragment = new SettingsFragment();
+        }
+
+        if (fragment != null) {
+            loadFragment(fragment);
+            return true;
+        }
+        return false;
+    }
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+
+        // Checks the orientation of the screen
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            setContentView(R.layout.activity_main);  // This will use the landscape layout
+            initializeViews();
+            setupNavigation();
+            setupRecyclerView();
+            setupSearchView();
+            setupAddTaskButton();
+            setupDeleteButton();
+            setupSelectAllCheckBox();
+        } else if (newConfig.orientation == Configuration.ORIENTATION_PORTRAIT){
+            setContentView(R.layout.activity_main);  // This will use the portrait layout
+            initializeViews();
+            setupNavigation();
+            setupRecyclerView();
+            setupSearchView();
+            setupAddTaskButton();
+            setupDeleteButton();
+            setupSelectAllCheckBox();
+        }
     }
     private void setToolbarTitle(String title) {
         if (getSupportActionBar() != null) {
@@ -130,6 +224,8 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
         FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
         transaction.replace(R.id.fragment_container, fragment);
         transaction.setPrimaryNavigationFragment(fragment); // Sets this as the primary navigation fragment.
+        transaction.addToBackStack(null); // Add to backstack to navigate back
+
         transaction.commit();
     }
     private void toggleEstimateDateView() {
@@ -140,20 +236,26 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
     private void setupRecyclerView() {
         fetchTasksFromDatabase();
 
-        if (taskIDList.size() == taskNameList.size() &&
-                taskNameList.size() == estimateDayList.size() &&
-                estimateDayList.size() == assigneeList.size() &&
-                assigneeList.size() == startDateList.size() &&
-                startDateList.size() == endDateList.size()) {
-
+        if (isTaskDataConsistent()) {
             taskAdapter = new TaskAdapter(this, taskIDList, taskNameList, estimateDayList, assigneeList, startDateList, endDateList, this);
             recyclerView.setAdapter(taskAdapter);
             recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
+            if (recyclerViewState != null) {
+                recyclerView.getLayoutManager().onRestoreInstanceState(recyclerViewState);
+            }
             Log.d("MainActivity", "RecyclerView item count: " + taskAdapter.getItemCount());
         } else {
             Toast.makeText(this, "Error: Task data is inconsistent.", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private boolean isTaskDataConsistent() {
+        return taskIDList.size() == taskNameList.size() &&
+                taskNameList.size() == estimateDayList.size() &&
+                estimateDayList.size() == assigneeList.size() &&
+                assigneeList.size() == startDateList.size() &&
+                startDateList.size() == endDateList.size();
     }
 
     private void setupSearchView() {
@@ -252,12 +354,7 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
         bottomSheetDialog.setContentView(dialogView);
         bottomSheetDialog.show();
     }
-    public void updateTaskListView() {
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        boolean showEstimateDay = prefs.getBoolean("show_estimate_day", true);
-        taskAdapter.setShowEstimateDay(showEstimateDay);
-        taskAdapter.notifyDataSetChanged();
-    }
+
     @Override
     public void onTaskUpdate(Task task) {
         showUpdateTaskDialog(task);
@@ -443,7 +540,6 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
     }
 
 
-
     @Override
     public void onTaskDelete(Task task) {
         // Handle the task delete logic here
@@ -492,5 +588,6 @@ public class MainActivity extends AppCompatActivity implements TaskAdapter.TaskI
 
         // Uncheck the selectAllCheckBox
         selectAllCheckBox.setChecked(false);
+
     }
 }

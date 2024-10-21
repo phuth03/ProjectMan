@@ -134,7 +134,7 @@ public class TaskAdapter extends RecyclerView.Adapter<TaskAdapter.ViewHolder> im
             holder.estimateDay.setVisibility(View.VISIBLE);
             holder.estimateDay.setText(String.valueOf(estimateDayList.get(position)));
         } else {
-            holder.estimateDay.setVisibility(View.GONE);
+            holder.estimateDay.setVisibility(View.INVISIBLE);
         }
 
     }

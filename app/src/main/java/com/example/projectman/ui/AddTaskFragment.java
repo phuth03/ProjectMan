@@ -52,33 +52,20 @@ public class AddTaskFragment extends DialogFragment {
 
         Button buttonAddTask = view.findViewById(R.id.btnSaveTask);
 
-        ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(requireContext(),
-                R.array.status_options, android.R.layout.simple_spinner_item);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-
         buttonAddTask.setOnClickListener(v -> addTask());
 
         builder.setView(view)
                 .setTitle("Add New Task")
                 .setNegativeButton("Cancel", (dialog, id) -> dismiss());
-//        if (editTextTaskName.length() > 0 || editTextAssignee.length() >0
-//                || editTextStartDate.length() >0 || editTextEndDate.length() >0
-//                || editTextEstimateDate.length() >0) {
-//            editTextTaskName.setText("Task Name");
-//            editTextAssignee.setText("Assignee Name");
-//            editTextStartDate.setText("Start Date");
-//            editTextEndDate.setText("End Date");
-//            editTextEstimateDate.setText("Estimate Days");
-//        }
         return builder.create();
     }
 
     private void addTask() {
         String taskName = editTextTaskName.getText().toString().trim();
-        String devName = "Your Assignee Name"; // TODO: Implement dynamic assignment
-        String startDate = "2024/05/03"; // TODO: Implement date picker
-        int estimateDay = 5; // TODO: Implement estimate input
-        String endDate = "2024/05/05"; // TODO: Calculate based on start date and estimate
+        String devName = "Your Assignee Name";
+        String startDate = "2024/05/03";
+        int estimateDay = 5;
+        String endDate = "2024/05/05";
 
         if (taskName.isEmpty()) {
             editTextTaskName.setError("Task name cannot be empty");
